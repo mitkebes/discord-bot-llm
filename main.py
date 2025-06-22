@@ -7,21 +7,21 @@ from bot import LLMBot, setup
 async def main():
     """
     Main async function to load environment variables and run the Discord bot.
+    
+    The bot's LLM provider can be configured in the .env file.
+    Set LLM_PROVIDER to "GEMINI" or "LMSTUDIO".
+    - For GEMINI, add your GEMINI_API_KEY.
+    - For LMSTUDIO, ensure LM_STUDIO_API_URL is set (or defaults correctly).
     """
-    # Load environment variables from a .env file
-    # This is where you'll store your Discord bot token and LM Studio URL
     load_dotenv()
 
     discord_token = os.getenv("DISCORD_BOT_TOKEN")
-    lm_studio_url = os.getenv("LM_STUDIO_API_URL", "http://localhost:1234/v1")
-
     if not discord_token:
         print("Error: DISCORD_BOT_TOKEN not found in .env file.")
-        print("Please create a .env file and add your bot token.")
         return
 
-    # Create an instance of the bot
-    client = LLMBot(lm_studio_url=lm_studio_url)
+    # Bot initialization is now simpler, with no provider-specific arguments.
+    client = LLMBot()
 
     try:
         # The setup function, imported from bot.py, adds the slash commands to the bot

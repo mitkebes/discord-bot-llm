@@ -8,21 +8,19 @@ from typing import List
 
 class LLMBot(commands.Bot):
     """
-    A Discord bot that uses slash commands to interact with an LLM.
+    A Discord bot that uses slash commands to interact with a configured LLM.
     """
-    def __init__(self, lm_studio_url: str):
+    def __init__(self):
         """
-        Initializes the bot. We pass a dummy command_prefix because it's required,
-        but we'll be using slash commands.
+        Initializes the bot. The LLM provider is configured via environment variables.
         """
         intents = discord.Intents.default()
         intents.messages = True
         intents.message_content = True
         intents.guilds = True
-        # The prefix is required for commands.Bot but won't be used for slash commands.
+        # The prefix is required but won't be used for slash commands.
         super().__init__(command_prefix="!", intents=intents)
 
-        self.lm_studio_url = lm_studio_url
         self.prompts = self.load_prompts()
         self.system_prompt = self.prompts.get("default", "You are a helpful assistant.")
         print("Bot initialized. Connecting to Discord...")
@@ -40,10 +38,7 @@ class LLMBot(commands.Bot):
             return {"default": "You are a helpful assistant."}
 
     async def setup_hook(self):
-        """
-        This is called automatically when the bot logs in.
-        It's the perfect place to sync our slash commands with Discord.
-        """
+        """Syncs slash commands when the bot logs in."""
         await self.tree.sync()
         print("Slash commands have been synced.")
 
@@ -54,16 +49,13 @@ class LLMBot(commands.Bot):
         print('------')
 
     async def on_message(self, message: discord.Message):
-        """Called whenever a message is sent."""
+        """Handles direct mentions to the bot."""
         if message.author == self.user:
             return
 
-        # We no longer need to process text commands.
-        # This part now only handles direct mentions of the bot.
         if self.user.mentioned_in(message):
             async with message.channel.typing():
                 try:
-                    # Clean the prompt to remove the bot mention
                     prompt = message.content.replace(f'<@!{self.user.id}>', '').replace(f'<@{self.user.id}>', '').strip()
                     
                     if not prompt:
@@ -71,10 +63,12 @@ class LLMBot(commands.Bot):
                         return
 
                     print(f"Received prompt from {message.author.name}: '{prompt}'")
-                    llm_response = await get_llm_response(prompt, self.lm_studio_url, self.system_prompt)
+                    # This call is now generic and works with any configured provider.
+                    llm_response = await get_llm_response(prompt, self.system_prompt)
 
                     if llm_response:
                         if len(llm_response) > 2000:
+                            # Split response into chunks if it exceeds Discord's limit
                             parts = [llm_response[i:i+2000] for i in range(0, len(llm_response), 2000)]
                             for part in parts:
                                 await message.channel.send(part)
@@ -88,8 +82,6 @@ class LLMBot(commands.Bot):
                     await message.channel.send("An unexpected error occurred.")
 
 # --- Slash Commands ---
-
-# The `setprompt` command with autocomplete for the `name` argument.
 @app_commands.command(name="setprompt", description="Sets the system prompt for the bot.")
 @app_commands.describe(name="Choose a preset or type your own custom prompt.")
 async def setprompt(interaction: discord.Interaction, name: str):
@@ -104,12 +96,10 @@ async def setprompt(interaction: discord.Interaction, name: str):
 @setprompt.autocomplete('name')
 async def setprompt_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
     bot = interaction.client
-    # Filter prompts based on user's current input
     choices = [
         app_commands.Choice(name=prompt_name, value=prompt_name)
         for prompt_name in bot.prompts if current.lower() in prompt_name.lower()
     ]
-    # Return up to 25 choices, as per Discord's limit
     return choices[:25]
 
 @app_commands.command(name="prompt", description="Shows the current system prompt.")
@@ -123,10 +113,8 @@ async def list_prompts(interaction: discord.Interaction):
     if not bot.prompts:
         await interaction.response.send_message("No predefined prompts found.", ephemeral=True)
         return
-
     embed = discord.Embed(title="Available System Prompts", color=discord.Color.blue())
     for name, content in bot.prompts.items():
-        # Show the first 100 characters of the prompt
         embed.add_field(name=name, value=f"```{content[:100]}...```", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -140,8 +128,8 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(name="Mention the bot (@BotName)", value="Ask the bot a question directly by mentioning it.", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# We need to add the commands to the bot's command tree
 async def setup(bot: commands.Bot):
+    """Adds the slash commands to the bot's command tree."""
     bot.tree.add_command(setprompt)
     bot.tree.add_command(prompt)
     bot.tree.add_command(list_prompts)
