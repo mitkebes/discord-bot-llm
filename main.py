@@ -8,8 +8,6 @@ def main():
     """
     Main function to load environment variables and run the Discord bot.
     """
-    # Load environment variables from a .env file
-    # This is where you'll store your Discord bot token and LM Studio URL
     load_dotenv()
 
     discord_token = os.getenv("DISCORD_BOT_TOKEN")
@@ -17,11 +15,12 @@ def main():
 
     if not discord_token:
         print("Error: DISCORD_BOT_TOKEN not found in .env file.")
-        print("Please create a .env file and add your bot token.")
         return
 
-    # Create an instance of the bot and run it
-    client = LLMBot(lm_studio_url=lm_studio_url)
+    # Create an instance of the bot with a command prefix and run it
+    # The command prefix is the character you'll use to issue commands, e.g., !setprompt
+    client = LLMBot(command_prefix="!", lm_studio_url=lm_studio_url)
+    
     try:
         client.run(discord_token)
     except Exception as e:

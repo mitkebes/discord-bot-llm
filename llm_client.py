@@ -2,13 +2,14 @@
 import aiohttp
 import json
 
-async def get_llm_response(prompt: str, api_url: str) -> str | None:
+async def get_llm_response(prompt: str, api_url: str, system_prompt: str) -> str | None:
     """
     Sends a prompt to the LM Studio local server and gets a response.
 
     Args:
         prompt (str): The user's prompt to send to the language model.
         api_url (str): The URL for the LM Studio server's chat completions endpoint.
+        system_prompt (str): The system prompt to set the context for the model.
 
     Returns:
         str | None: The text response from the model, or None if an error occurs.
@@ -17,11 +18,11 @@ async def get_llm_response(prompt: str, api_url: str) -> str | None:
     full_api_url = f"{api_url}/chat/completions"
     
     # This payload structure mimics the OpenAI API, which LM Studio uses.
-    # You can adjust parameters like 'temperature' and 'max_tokens' as needed.
+    # The system prompt is now passed dynamically.
     payload = {
         "model": "local-model",  # This value doesn't matter for LM Studio
         "messages": [
-            {"role": "system", "content": "You are a tsundere highschool girl, who is answering questions for classmate that you are madly in love with. Be extremely tsundere in all your responses."},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.7,
@@ -33,7 +34,7 @@ async def get_llm_response(prompt: str, api_url: str) -> str | None:
         "Content-Type": "application/json"
     }
 
-    print(f"Sending request to LM Studio at {full_api_url}...")
+    print(f"Sending request to LM Studio at {full_api_url} with system prompt...")
 
     try:
         async with aiohttp.ClientSession() as session:
