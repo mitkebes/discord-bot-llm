@@ -2,6 +2,7 @@
 import os
 import aiohttp
 import json
+import re
 
 async def get_llm_response(prompt: str, system_prompt: str) -> str | None:
     """
@@ -17,11 +18,15 @@ async def get_llm_response(prompt: str, system_prompt: str) -> str | None:
     api_url = os.getenv("LM_STUDIO_API_URL", "http://localhost:1234/v1")
     full_api_url = f"{api_url}/chat/completions"
     
+    # Append the /nothink command to the user's prompt to prevent the model
+    # from showing its reasoning or thought process.
+    prompt_with_command = f"{prompt}\n/nothink"
+    
     payload = {
         "model": "local-model",
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt_with_command}
         ],
         "temperature": 0.7,
         "max_tokens": -1,
@@ -38,7 +43,12 @@ async def get_llm_response(prompt: str, system_prompt: str) -> str | None:
                     data = await response.json()
                     content = data['choices'][0]['message']['content']
                     print("Successfully received response from LM Studio.")
-                    return content.strip()
+
+                    # Use regex to remove <think> and </think> tags from the response
+                    # and then strip any leading/trailing whitespace.
+                    cleaned_content = re.sub(r'</?think>', '', content).strip()
+
+                    return cleaned_content
                 else:
                     error_text = await response.text()
                     print(f"Error from LM Studio API: Status {response.status}, Response: {error_text}")

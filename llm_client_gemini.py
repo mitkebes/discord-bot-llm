@@ -23,7 +23,7 @@ async def get_llm_response(prompt: str, system_prompt: str) -> str | None:
         
         # In Gemini, system instructions are a specific parameter for the model
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash-latest',
+            model_name='gemini-2.5-flash-lite-preview-06-17',
             system_instruction=system_prompt
         )
         
