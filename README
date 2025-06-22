@@ -1,0 +1,81 @@
+How to Set Up and Run the LM Studio Discord Bot
+
+Follow these steps to get your Discord bot running.
+
+1. Prerequisites:
+
+    Python 3.8 or newer.
+
+    LM Studio installed and running on your computer.
+
+    A Discord account.
+
+2. Download a Model in LM Studio:
+
+    Open LM Studio.
+
+    Search for and download a model (e.g., Mistral 7B Instruct).
+
+    Go to the "Local Server" tab (the <-> icon).
+
+    Select the model you downloaded at the top.
+
+    Click Start Server. You should see a message indicating the server is running and listening at an address like http://localhost:1234/v1.
+
+3. Create a Discord Bot Application:
+
+    Go to the Discord Developer Portal.
+
+    Click "New Application" and give it a name.
+
+    Go to the "Bot" tab on the left.
+
+    Click "Reset Token" and copy the token. This is your DISCORD_BOT_TOKEN.
+
+    Enable the "Message Content Intent" under "Privileged Gateway Intents".
+
+4. Invite the Bot to Your Server:
+
+    Go to the "OAuth2" -> "URL Generator" tab.
+
+    Select the bot and applications.commands scopes.
+
+    Under "Bot Permissions", select "Send Messages" and "Read Message History".
+
+    Copy the generated URL, paste it into your browser, and invite the bot to your Discord server.
+
+5. Set Up the Project:
+
+    Save all the generated Python files (main.py, bot.py, llm_client.py) and requirements.txt in the same folder.
+
+    Create a file named .env in that folder.
+
+    Copy the content from .env.example into your new .env file.
+
+    Replace "YOUR_DISCORD_BOT_TOKEN_HERE" with the token you copied from the Discord Developer Portal.
+
+6. Install Dependencies:
+
+    Open a terminal or command prompt in your project folder.
+
+    Run the following command to install the required libraries:
+
+    pip install -r requirements.txt
+
+7. Run the Bot:
+
+    Make sure your LM Studio server is running.
+
+    In your terminal, run the main Python script:
+
+    python main.py
+
+    If everything is set up correctly, you'll see messages in your terminal indicating the bot has logged in.
+
+8. Talk to Your Bot:
+
+    Go to a channel in your Discord server.
+
+    Mention your bot and ask it a question. For example: @YourBotName What is the capital of France?
+
+    The bot will show a "thinking..." status and then reply with the answer from your local language model!
