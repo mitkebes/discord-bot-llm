@@ -107,7 +107,7 @@ async def prompt(interaction: discord.Interaction):
     bot = interaction.client
     await interaction.response.send_message(f"**Current System Prompt:**\n```\n{bot.system_prompt}\n```", ephemeral=True)
 
-@app_commands.command(name="prompts", description="Lists all available preset prompts.")
+@app_commands.command(name="showprompts", description="Lists all available preset prompts.")
 async def list_prompts(interaction: discord.Interaction):
     bot = interaction.client
     if not bot.prompts:
