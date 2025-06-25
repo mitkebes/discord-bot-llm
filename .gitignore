@@ -28,3 +28,5 @@ Thumbs.db
 *.bak
 *.tmp
 
+# User specific files
+banned_words.json

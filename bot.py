@@ -6,6 +6,7 @@ from llm_client import get_llm_response
 import json
 from typing import List
 import random
+import re
 
 class LLMBot(commands.Bot):
     """
@@ -23,11 +24,12 @@ class LLMBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
         self.prompts = self.load_prompts()
+        self.banned_words = self.load_banned_words() # Load banned words
         self.system_prompt = self.prompts.get("default", "You are a helpful assistant.")
         # Attributes for random and thinking modes
         self.random_mode = False
         self.last_random_prompt = None
-        self.thinking_enabled = False # New attribute for thinking mode
+        self.thinking_enabled = False
         print("Bot initialized. Connecting to Discord...")
 
     def load_prompts(self) -> dict:
@@ -41,6 +43,30 @@ class LLMBot(commands.Bot):
         except json.JSONDecodeError:
             print("Error: Could not decode prompts.json. Please check its format.")
             return {"default": "You are a helpful assistant."}
+
+    def load_banned_words(self) -> List[str]:
+        """Loads banned words from the banned_words.json file."""
+        try:
+            with open("banned_words.json", "r") as f:
+                words = json.load(f)
+                # Ensure all words are lowercase for case-insensitive matching
+                return [word.lower() for word in words]
+        except FileNotFoundError:
+            print("Warning: banned_words.json not found. No words will be banned.")
+            return []
+        except json.JSONDecodeError:
+            print("Error: Could not decode banned_words.json. No words will be banned.")
+            return []
+
+    def contains_banned_word(self, text: str) -> bool:
+        """Checks if the given text contains any banned words (case-insensitive)."""
+        if not self.banned_words:
+            return False
+        # Use regex to check for whole words to avoid partial matches (e.g., 'assist' in 'assistant')
+        for word in self.banned_words:
+            if re.search(r'\b' + re.escape(word) + r'\b', text.lower()):
+                return True
+        return False
 
     async def setup_hook(self):
         """Syncs slash commands when the bot logs in."""
@@ -66,6 +92,12 @@ class LLMBot(commands.Bot):
                     if not prompt:
                         await message.channel.send("You mentioned me, but didn't ask anything! How can I help?")
                         return
+                    
+                    # Check user's prompt for banned words
+                    if self.contains_banned_word(prompt):
+                        await message.channel.send("I'm sorry, but your message contains inappropriate language and cannot be processed.")
+                        print(f"Rejected prompt from {message.author.name} due to banned word.")
+                        return
 
                     print(f"Received prompt from {message.author.name}: '{prompt}'")
                     
@@ -80,10 +112,15 @@ class LLMBot(commands.Bot):
                         else:
                             print("Random mode ON, but no prompts are available. Using default.")
 
-                    # Pass the thinking_enabled state to the LLM client
                     llm_response = await get_llm_response(prompt, current_system_prompt, self.thinking_enabled)
 
                     if llm_response:
+                        # Check AI's response for banned words
+                        if self.contains_banned_word(llm_response):
+                            await message.channel.send("I'm sorry, the generated response contained inappropriate content and has been blocked.")
+                            print("Blocked an AI response due to a banned word.")
+                            return
+
                         if len(llm_response) > 2000:
                             parts = [llm_response[i:i+2000] for i in range(0, len(llm_response), 2000)]
                             for part in parts:
@@ -98,6 +135,8 @@ class LLMBot(commands.Bot):
                     await message.channel.send("An unexpected error occurred.")
 
 # --- Slash Commands ---
+# (The rest of the slash commands remain the same)
+
 @app_commands.command(name="setprompt", description="Sets the system prompt for the bot. This disables random mode.")
 @app_commands.describe(name="Choose a preset or type your own custom prompt.")
 async def setprompt(interaction: discord.Interaction, name: str):
@@ -151,7 +190,6 @@ async def random_command(interaction: discord.Interaction, enabled: bool):
     else:
         await interaction.response.send_message("❌ Random prompt mode has been **disabled**.", ephemeral=True)
 
-# NEW /think command
 @app_commands.command(name="think", description="Toggle whether the bot shows its thought process (LM Studio only).")
 @app_commands.describe(enabled="Set to 'True' to enable, 'False' to disable.")
 async def think_command(interaction: discord.Interaction, enabled: bool):
@@ -173,7 +211,6 @@ async def list_prompts(interaction: discord.Interaction):
         embed.add_field(name=name, value=f"```{content[:100]}...```", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# MODIFIED /help command
 @app_commands.command(name="help", description="Shows the list of available commands.")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(title="Bot Commands", description="Here are the available slash commands:", color=discord.Color.green())
@@ -186,7 +223,6 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(name="Mention the bot (@BotName)", value="Ask the bot a question directly by mentioning it.", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# MODIFIED setup function
 async def setup(bot: commands.Bot):
     """Adds the slash commands to the bot's command tree."""
     bot.tree.add_command(setprompt)
@@ -194,5 +230,5 @@ async def setup(bot: commands.Bot):
     bot.tree.add_command(list_prompts)
     bot.tree.add_command(help_command)
     bot.tree.add_command(random_command)
-    bot.tree.add_command(think_command) # Add the new think command
+    bot.tree.add_command(think_command)
 
