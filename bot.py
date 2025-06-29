@@ -218,7 +218,7 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(name="/prompt", value="Displays the current system prompt or random mode status.", inline=False)
     embed.add_field(name="/random [True|False]", value="Toggles using a random prompt for each reply.", inline=False)
     embed.add_field(name="/think [True|False]", value="Toggles whether the bot shows its thought process (LM Studio only).", inline=False)
-    embed.add_field(name="/prompts", value="Lists all available preset prompts.", inline=False)
+    embed.add_field(name="/showprompts", value="Lists all available preset prompts.", inline=False)
     embed.add_field(name="/help", value="Shows this help message.", inline=False)
     embed.add_field(name="Mention the bot (@BotName)", value="Ask the bot a question directly by mentioning it.", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
