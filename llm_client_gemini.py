@@ -19,12 +19,14 @@ async def get_llm_response(prompt: str, system_prompt: str, history: List[Dict[s
         print("Error: GEMINI_API_KEY not found in .env file.")
         return "The `GEMINI_API_KEY` is missing. Please ask the bot administrator to configure it."
 
+    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+
     try:
         genai.configure(api_key=api_key)
         
         # In Gemini, system instructions are a specific parameter for the model
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash',
+            model_name=model_name,
             system_instruction=system_prompt
         )
         
