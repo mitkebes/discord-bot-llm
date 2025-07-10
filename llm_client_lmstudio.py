@@ -3,8 +3,9 @@ import os
 import aiohttp
 import json
 import re
+from typing import List, Dict
 
-async def get_llm_response(prompt: str, system_prompt: str, thinking_enabled: bool = False) -> str | None:
+async def get_llm_response(prompt: str, system_prompt: str, thinking_enabled: bool = False, history: List[Dict[str, str]] = []) -> str | None:
     """
     Sends a prompt to the LM Studio local server and gets a response.
 
@@ -20,13 +21,16 @@ async def get_llm_response(prompt: str, system_prompt: str, thinking_enabled: bo
     # If thinking is disabled, append the /nothink command to the user's prompt.
     if not thinking_enabled:
         prompt_to_send = f"{prompt}\n/nothink"
+
+    messages = [
+        {"role": "system", "content": system_prompt}
+    ]
+    messages.extend(history)
+    messages.append({"role": "user", "content": prompt_to_send})
     
     payload = {
         "model": "local-model",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt_to_send}
-        ],
+        "messages": messages,
         "temperature": 0.7,
         "max_tokens": -1,
         "stream": False

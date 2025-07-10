@@ -7,6 +7,11 @@ import json
 from typing import List
 import random
 import re
+import os
+
+# The maximum number of messages to keep in the history for each channel.
+# This is set via the MAX_HISTORY environment variable.
+MAX_HISTORY = int(os.getenv("MAX_HISTORY", 20))
 
 class LLMBot(commands.Bot):
     """
@@ -30,6 +35,7 @@ class LLMBot(commands.Bot):
         self.random_mode = False
         self.last_random_prompt = None
         self.thinking_enabled = False
+        self.message_history = {}
         print("Bot initialized. Connecting to Discord...")
 
     def load_prompts(self) -> dict:
@@ -100,6 +106,12 @@ class LLMBot(commands.Bot):
                         return
 
                     print(f"Received prompt from {message.author.name}: '{prompt}'")
+
+                    channel_id = message.channel.id
+                    if channel_id not in self.message_history:
+                        self.message_history[channel_id] = []
+
+                    history = self.message_history[channel_id]
                     
                     current_system_prompt = self.system_prompt
                     if self.random_mode:
@@ -112,7 +124,7 @@ class LLMBot(commands.Bot):
                         else:
                             print("Random mode ON, but no prompts are available. Using default.")
 
-                    llm_response = await get_llm_response(prompt, current_system_prompt, self.thinking_enabled)
+                    llm_response = await get_llm_response(prompt, current_system_prompt, self.thinking_enabled, history)
 
                     if llm_response:
                         # Check AI's response for banned words
@@ -120,6 +132,15 @@ class LLMBot(commands.Bot):
                             await message.channel.send("I'm sorry, the generated response contained inappropriate content and has been blocked.")
                             print("Blocked an AI response due to a banned word.")
                             return
+                        
+                        # Add the user's prompt and the AI's response to the history
+                        history.append({"role": "user", "content": prompt})
+                        history.append({"role": "assistant", "content": llm_response})
+                        
+                        # Keep the history to a manageable size
+                        if len(history) > MAX_HISTORY * 2: # Each interaction is 2 messages
+                            self.message_history[channel_id] = history[-(MAX_HISTORY * 2):]
+
 
                         if len(llm_response) > 2000:
                             parts = [llm_response[i:i+2000] for i in range(0, len(llm_response), 2000)]
@@ -219,9 +240,20 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(name="/random [True|False]", value="Toggles using a random prompt for each reply.", inline=False)
     embed.add_field(name="/think [True|False]", value="Toggles whether the bot shows its thought process (LM Studio only).", inline=False)
     embed.add_field(name="/showprompts", value="Lists all available preset prompts.", inline=False)
+    embed.add_field(name="/clearhistory", value="Clears the conversation history for this channel.", inline=False)
     embed.add_field(name="/help", value="Shows this help message.", inline=False)
     embed.add_field(name="Mention the bot (@BotName)", value="Ask the bot a question directly by mentioning it.", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@app_commands.command(name="clearhistory", description="Clears the conversation history for this channel.")
+async def clear_history(interaction: discord.Interaction):
+    bot = interaction.client
+    channel_id = interaction.channel_id
+    if channel_id in bot.message_history:
+        bot.message_history[channel_id] = []
+        await interaction.response.send_message("Conversation history for this channel has been cleared.", ephemeral=True)
+    else:
+        await interaction.response.send_message("There is no history to clear for this channel.", ephemeral=True)
 
 async def setup(bot: commands.Bot):
     """Adds the slash commands to the bot's command tree."""
@@ -231,4 +263,5 @@ async def setup(bot: commands.Bot):
     bot.tree.add_command(help_command)
     bot.tree.add_command(random_command)
     bot.tree.add_command(think_command)
+    bot.tree.add_command(clear_history)
 

@@ -1,8 +1,9 @@
 # llm_client_gemini.py   
 import os
 import google.generativeai as genai
+from typing import List, Dict
 
-async def get_llm_response(prompt: str, system_prompt: str) -> str | None:
+async def get_llm_response(prompt: str, system_prompt: str, history: List[Dict[str, str]] = []) -> str | None:
     """
     Sends a prompt to the Google Gemini API and gets a response.
 
@@ -23,12 +24,20 @@ async def get_llm_response(prompt: str, system_prompt: str) -> str | None:
         
         # In Gemini, system instructions are a specific parameter for the model
         model = genai.GenerativeModel(
-            model_name='gemini-2.5-flash-lite-preview-06-17',
+            model_name='gemini-1.5-flash',
             system_instruction=system_prompt
         )
         
+        # Convert history to Gemini's format
+        gemini_history = []
+        for message in history:
+            role = 'user' if message['role'] == 'user' else 'model'
+            gemini_history.append({'role': role, 'parts': [message['content']]})
+
+        chat = model.start_chat(history=gemini_history)
+
         print("Sending request to Gemini API...")
-        response = await model.generate_content_async(prompt)
+        response = await chat.send_message_async(prompt)
         
         print("Successfully received response from Gemini API.")
         return response.text.strip()
