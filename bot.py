@@ -96,6 +96,20 @@ class LLMBot(commands.Bot):
                 try:
                     prompt = message.content.replace(f'<@!{self.user.id}>', '').replace(f'<@{self.user.id}>', '').strip()
                     
+                    # Check if the message is a reply
+                    if message.reference and message.reference.message_id:
+                        try:
+                            referenced_message = await message.channel.fetch_message(message.reference.message_id)
+                            if referenced_message.content:
+                                context_str = f"[Context: Replying to a message by {referenced_message.author.name}: \"{referenced_message.content}\"]\n\n"
+                                prompt = context_str + prompt
+                                print(f"Added reply context from {referenced_message.author.name}")
+                        except discord.NotFound:
+                            print("Referenced message not found (it might have been deleted).")
+                        except Exception as e:
+                            print(f"Error fetching referenced message: {e}")
+
+                    
                     if not prompt:
                         await message.channel.send("You mentioned me, but didn't ask anything! How can I help?")
                         return
