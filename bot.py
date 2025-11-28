@@ -35,6 +35,7 @@ class LLMBot(commands.Bot):
         self.random_mode = False
         self.last_random_prompt = None
         self.thinking_enabled = False
+        self.grounding_enabled = False
         self.message_history = {}
         print("Bot initialized. Connecting to Discord...")
 
@@ -124,7 +125,7 @@ class LLMBot(commands.Bot):
                         else:
                             print("Random mode ON, but no prompts are available. Using default.")
 
-                    llm_response = await get_llm_response(prompt, current_system_prompt, self.thinking_enabled, history)
+                    llm_response = await get_llm_response(prompt, current_system_prompt, history, grounding=self.grounding_enabled)
 
                     if llm_response:
                         # Check AI's response for banned words
@@ -221,6 +222,16 @@ async def think_command(interaction: discord.Interaction, enabled: bool):
     else:
         await interaction.response.send_message("✅ Thinking mode has been **disabled**.", ephemeral=True)
 
+@app_commands.command(name="grounding", description="Toggle Google Search grounding.")
+@app_commands.describe(enabled="Set to 'True' to enable, 'False' to disable.")
+async def grounding_command(interaction: discord.Interaction, enabled: bool):
+    bot = interaction.client
+    bot.grounding_enabled = enabled
+    if enabled:
+        await interaction.response.send_message("🌍 Grounding has been **enabled**. The bot will now use Google Search.", ephemeral=True)
+    else:
+        await interaction.response.send_message("✅ Grounding has been **disabled**.", ephemeral=True)
+
 @app_commands.command(name="showprompts", description="Lists all available preset prompts.")
 async def list_prompts(interaction: discord.Interaction):
     bot = interaction.client
@@ -239,6 +250,7 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(name="/prompt", value="Displays the current system prompt or random mode status.", inline=False)
     embed.add_field(name="/random [True|False]", value="Toggles using a random prompt for each reply.", inline=False)
     embed.add_field(name="/think [True|False]", value="Toggles whether the bot shows its thought process (LM Studio only).", inline=False)
+    embed.add_field(name="/grounding [True|False]", value="Toggles whether the bot uses Google Search grounding (Gemini only).", inline=False)
     embed.add_field(name="/showprompts", value="Lists all available preset prompts.", inline=False)
     embed.add_field(name="/clearhistory", value="Clears the conversation history for this channel.", inline=False)
     embed.add_field(name="/help", value="Shows this help message.", inline=False)
@@ -263,5 +275,6 @@ async def setup(bot: commands.Bot):
     bot.tree.add_command(help_command)
     bot.tree.add_command(random_command)
     bot.tree.add_command(think_command)
+    bot.tree.add_command(grounding_command)
     bot.tree.add_command(clear_history)
 

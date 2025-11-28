@@ -6,7 +6,7 @@ from typing import List, Dict
 
 from typing import List, Dict
 
-async def get_llm_response(prompt: str, system_prompt: str, thinking_enabled: bool = False, history: List[Dict[str, str]] = []) -> str | None:
+async def get_llm_response(prompt: str, system_prompt: str, thinking_enabled: bool = False, history: List[Dict[str, str]] = [], grounding: bool = False) -> str | None:
     """
     Gets a response from the configured LLM provider.
 
@@ -18,7 +18,7 @@ async def get_llm_response(prompt: str, system_prompt: str, thinking_enabled: bo
     if provider == "GEMINI":
         print("Using Gemini API as the LLM provider.")
         # The 'thinking_enabled' flag is not applicable to Gemini, so we don't pass it.
-        return await get_gemini_response(prompt, system_prompt, history)
+        return await get_gemini_response(prompt, system_prompt, history, grounding=grounding)
     
     # For LM Studio or default, pass the thinking_enabled flag.
     elif provider == "LMSTUDIO":
