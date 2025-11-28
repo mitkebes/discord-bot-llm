@@ -31,3 +31,10 @@ Thumbs.db
 # User specific files
 banned_words.json
 log.txt
+
+#pycache files
+__pycache__
+__pycache__/bot.cpython-313.pyc
+__pycache__/llm_client_gemini.cpython-313.pyc
+__pycache__/llm_client_lmstudio.cpython-313.pyc
+__pycache__/llm_client.cpython-313.pyc
