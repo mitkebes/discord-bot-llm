@@ -30,12 +30,15 @@ class LLMBot(commands.Bot):
 
         self.prompts = self.load_prompts()
         self.banned_words = self.load_banned_words() # Load banned words
-        self.system_prompt = self.prompts.get("default", "You are a helpful assistant.")
-        # Attributes for random and thinking modes
-        self.random_mode = False
-        self.last_random_prompt = None
-        self.thinking_enabled = False
-        self.grounding_enabled = False
+        
+        # Load persistent settings
+        self.settings = self.load_settings()
+        self.system_prompt = self.settings.get("system_prompt", self.prompts.get("default", "You are a helpful assistant."))
+        self.random_mode = self.settings.get("random_mode", False)
+        self.thinking_enabled = self.settings.get("thinking_enabled", False)
+        self.grounding_enabled = self.settings.get("grounding_enabled", False)
+        self.last_random_prompt = None # This doesn't need to be persisted
+        
         self.message_history = {}
         print("Bot initialized. Connecting to Discord...")
 
@@ -64,6 +67,33 @@ class LLMBot(commands.Bot):
         except json.JSONDecodeError:
             print("Error: Could not decode banned_words.json. No words will be banned.")
             return []
+
+    def load_settings(self) -> dict:
+        """Loads settings from settings.json."""
+        try:
+            with open("settings.json", "r") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            print("Warning: settings.json not found. Using defaults.")
+            return {}
+        except json.JSONDecodeError:
+            print("Error: Could not decode settings.json. Using defaults.")
+            return {}
+
+    def save_settings(self):
+        """Saves current settings to settings.json."""
+        settings = {
+            "system_prompt": self.system_prompt,
+            "random_mode": self.random_mode,
+            "thinking_enabled": self.thinking_enabled,
+            "grounding_enabled": self.grounding_enabled
+        }
+        try:
+            with open("settings.json", "w") as f:
+                json.dump(settings, f, indent=4)
+            print("Settings saved to settings.json")
+        except Exception as e:
+            print(f"Error saving settings: {e}")
 
     def contains_banned_word(self, text: str) -> bool:
         """Checks if the given text contains any banned words (case-insensitive)."""
@@ -190,6 +220,8 @@ async def setprompt(interaction: discord.Interaction, name: str):
         bot.system_prompt = name
         response_parts.append(f"Custom system prompt has been set.")
     
+    bot.save_settings()
+    
     await interaction.response.send_message("\n".join(response_parts), ephemeral=True)
 
 
@@ -220,6 +252,7 @@ async def prompt(interaction: discord.Interaction):
 async def random_command(interaction: discord.Interaction, enabled: bool):
     bot = interaction.client
     bot.random_mode = enabled
+    bot.save_settings()
     if enabled:
         bot.last_random_prompt = None
         await interaction.response.send_message("✅ Random prompt mode has been **enabled**.", ephemeral=True)
@@ -231,6 +264,7 @@ async def random_command(interaction: discord.Interaction, enabled: bool):
 async def think_command(interaction: discord.Interaction, enabled: bool):
     bot = interaction.client
     bot.thinking_enabled = enabled
+    bot.save_settings()
     if enabled:
         await interaction.response.send_message("🤔 Thinking mode has been **enabled**. The bot will now show its thought process.", ephemeral=True)
     else:
@@ -241,6 +275,7 @@ async def think_command(interaction: discord.Interaction, enabled: bool):
 async def grounding_command(interaction: discord.Interaction, enabled: bool):
     bot = interaction.client
     bot.grounding_enabled = enabled
+    bot.save_settings()
     if enabled:
         await interaction.response.send_message("🌍 Grounding has been **enabled**. The bot will now use Google Search.", ephemeral=True)
     else:
