@@ -52,7 +52,18 @@ async def get_llm_response(prompt: str, system_prompt: str, history: List[Dict[s
             response = await chat.send_message(prompt)
             
             print("Successfully received response from Gemini API.")
-            return response.text.strip()
+            if response.text:
+                return response.text.strip()
+            else:
+                reason = "Unknown"
+                if hasattr(response, "candidates") and response.candidates:
+                    c = response.candidates[0]
+                    if hasattr(c, "finish_reason"):
+                        # Convert Enum to string gracefully
+                        reason = getattr(c.finish_reason, "name", str(c.finish_reason))
+                
+                print(f"Warning: response.text is None. Full response: {response}")
+                return f"Sorry, no text was generated. This is typically due to safety filters. Finish reason: {reason}"
         else:
             # Fallback if aio is not available (should not happen with recent google-genai)
             print("Error: Async client not available.")
