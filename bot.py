@@ -37,10 +37,14 @@ class LLMBot(commands.Bot):
         self.random_mode = self.settings.get("random_mode", False)
         self.thinking_enabled = self.settings.get("thinking_enabled", False)
         self.grounding_enabled = self.settings.get("grounding_enabled", False)
+        self.llm_provider = self.settings.get("llm_provider", os.getenv("LLM_PROVIDER", "LMSTUDIO")).upper()
+        self.gemini_model = self.settings.get("gemini_model", os.getenv("GEMINI_MODEL", "gemini-2.0-flash"))
+        self.run_in_background = self.settings.get("run_in_background", os.getenv("RUN_IN_BACKGROUND", "false").lower() == "true")
+        self.max_history = int(self.settings.get("max_history", os.getenv("MAX_HISTORY", 15)))
         self.last_random_prompt = None # This doesn't need to be persisted
         
         self.message_history = {}
-        print("Bot initialized. Connecting to Discord...")
+        print(f"Bot initialized (Provider: {self.llm_provider}, Model: {self.gemini_model}). Connecting to Discord...")
 
     def load_prompts(self) -> dict:
         """Loads system prompts from the prompts.json file."""
@@ -86,7 +90,11 @@ class LLMBot(commands.Bot):
             "system_prompt": self.system_prompt,
             "random_mode": self.random_mode,
             "thinking_enabled": self.thinking_enabled,
-            "grounding_enabled": self.grounding_enabled
+            "grounding_enabled": self.grounding_enabled,
+            "llm_provider": self.llm_provider,
+            "gemini_model": self.gemini_model,
+            "run_in_background": self.run_in_background,
+            "max_history": self.max_history
         }
         try:
             with open("settings.json", "w") as f:
@@ -122,83 +130,113 @@ class LLMBot(commands.Bot):
             return
 
         if self.user.mentioned_in(message):
-            async with message.channel.typing():
-                try:
-                    prompt = message.content.replace(f'<@!{self.user.id}>', '').replace(f'<@{self.user.id}>', '').strip()
-                    
-                    # Check if the message is a reply
-                    if message.reference and message.reference.message_id:
-                        try:
-                            referenced_message = await message.channel.fetch_message(message.reference.message_id)
-                            if referenced_message.content:
-                                context_str = f"[Context: Replying to a message by {referenced_message.author.name}: \"{referenced_message.content}\"]\n\n"
-                                prompt = context_str + prompt
-                                print(f"Added reply context from {referenced_message.author.name}")
-                        except discord.NotFound:
-                            print("Referenced message not found (it might have been deleted).")
-                        except Exception as e:
-                            print(f"Error fetching referenced message: {e}")
-
-                    
-                    if not prompt:
-                        await message.channel.send("You mentioned me, but didn't ask anything! How can I help?")
-                        return
-                    
-                    # Check user's prompt for banned words
-                    if self.contains_banned_word(prompt):
-                        await message.channel.send("I'm sorry, but your message contains inappropriate language and cannot be processed.")
-                        print(f"Rejected prompt from {message.author.name} due to banned word.")
-                        return
-
-                    print(f"Received prompt from {message.author.name}: '{prompt}'")
-
-                    channel_id = message.channel.id
-                    if channel_id not in self.message_history:
-                        self.message_history[channel_id] = []
-
-                    history = self.message_history[channel_id]
-                    
-                    current_system_prompt = self.system_prompt
-                    if self.random_mode:
-                        available_prompts = list(self.prompts.values())
-                        if available_prompts:
-                            chosen_prompt = random.choice(available_prompts)
-                            self.last_random_prompt = chosen_prompt
-                            current_system_prompt = chosen_prompt
-                            print(f"Random mode ON. Using prompt: {chosen_prompt[:60]}...")
-                        else:
-                            print("Random mode ON, but no prompts are available. Using default.")
-
-                    llm_response = await get_llm_response(prompt, current_system_prompt, history, grounding=self.grounding_enabled)
-
-                    if llm_response:
-                        # Check AI's response for banned words
-                        if self.contains_banned_word(llm_response):
-                            await message.channel.send("I'm sorry, the generated response contained inappropriate content and has been blocked.")
-                            print("Blocked an AI response due to a banned word.")
-                            return
-                        
-                        # Add the user's prompt and the AI's response to the history
-                        history.append({"role": "user", "content": prompt})
-                        history.append({"role": "assistant", "content": llm_response})
-                        
-                        # Keep the history to a manageable size
-                        if len(history) > MAX_HISTORY * 2: # Each interaction is 2 messages
-                            self.message_history[channel_id] = history[-(MAX_HISTORY * 2):]
-
-
-                        if len(llm_response) > 2000:
-                            parts = [llm_response[i:i+2000] for i in range(0, len(llm_response), 2000)]
-                            for part in parts:
-                                await message.channel.send(part)
-                        else:
-                            await message.channel.send(llm_response)
-                    else:
-                        await message.channel.send("Sorry, I couldn't get a response from the model.")
+            status_msg = None
+            try:
+                prompt = message.content.replace(f'<@!{self.user.id}>', '').replace(f'<@{self.user.id}>', '').strip()
                 
-                except Exception as e:
-                    print(f"An error occurred while processing a message: {e}")
-                    await message.channel.send("An unexpected error occurred.")
+                # Check if the message is a reply
+                if message.reference and message.reference.message_id:
+                    try:
+                        referenced_message = await message.channel.fetch_message(message.reference.message_id)
+                        if referenced_message.content:
+                            context_str = f"[Context: Replying to a message by {referenced_message.author.name}: \"{referenced_message.content}\"]\n\n"
+                            prompt = context_str + prompt
+                            print(f"Added reply context from {referenced_message.author.name}")
+                    except discord.NotFound:
+                        print("Referenced message not found (it might have been deleted).")
+                    except Exception as e:
+                        print(f"Error fetching referenced message: {e}")
+
+                if not prompt:
+                    await message.reply("You mentioned me, but didn't ask anything! How can I help?", mention_author=False)
+                    return
+                
+                # Check user's prompt for banned words
+                if self.contains_banned_word(prompt):
+                    await message.reply("I'm sorry, but your message contains inappropriate language and cannot be processed.", mention_author=False)
+                    print(f"Rejected prompt from {message.author.name} due to banned word.")
+                    return
+
+                # Send immediate status reply
+                status_msg = await message.reply("⏳ Generating response...", mention_author=False)
+
+                async def update_status(text: str):
+                    if status_msg:
+                        try:
+                            await status_msg.edit(content=text)
+                        except Exception as e:
+                            print(f"Error editing status message: {e}")
+
+                print(f"Received prompt from {message.author.name}: '{prompt}'")
+
+                channel_id = message.channel.id
+                if channel_id not in self.message_history:
+                    self.message_history[channel_id] = []
+
+                history = self.message_history[channel_id]
+                
+                current_system_prompt = self.system_prompt
+                if self.random_mode:
+                    available_prompts = list(self.prompts.values())
+                    if available_prompts:
+                        chosen_prompt = random.choice(available_prompts)
+                        self.last_random_prompt = chosen_prompt
+                        current_system_prompt = chosen_prompt
+                        print(f"Random mode ON. Using prompt: {chosen_prompt[:60]}...")
+                    else:
+                        print("Random mode ON, but no prompts are available. Using default.")
+
+                llm_response = await get_llm_response(
+                    prompt,
+                    current_system_prompt,
+                    thinking_enabled=self.thinking_enabled,
+                    history=history,
+                    grounding=self.grounding_enabled,
+                    status_callback=update_status,
+                    provider=self.llm_provider,
+                    model=self.gemini_model if self.llm_provider == "GEMINI" else None
+                )
+
+                if llm_response:
+                    # If this is an error reported from the LLM provider, show it directly without saving to history
+                    if llm_response.startswith("⚠️"):
+                        print(f"Reporting LLM error to user: {llm_response}")
+                        await status_msg.edit(content=llm_response)
+                        return
+
+                    # Check AI's response for banned words
+                    if self.contains_banned_word(llm_response):
+                        await status_msg.edit(content="I'm sorry, the generated response contained inappropriate content and has been blocked.")
+                        print("Blocked an AI response due to a banned word.")
+                        return
+                    
+                    # Add the user's prompt and the AI's response to the history
+                    history.append({"role": "user", "content": prompt})
+                    history.append({"role": "assistant", "content": llm_response})
+                    
+                    # Keep the history to a manageable size
+                    if len(history) > self.max_history * 2: # Each interaction is 2 messages
+                        self.message_history[channel_id] = history[-(self.max_history * 2):]
+
+                    if len(llm_response) > 2000:
+                        parts = [llm_response[i:i+2000] for i in range(0, len(llm_response), 2000)]
+                        await status_msg.edit(content=parts[0])
+                        for part in parts[1:]:
+                            await message.channel.send(part)
+                    else:
+                        await status_msg.edit(content=llm_response)
+                else:
+                    await status_msg.edit(content="⚠️ No response was received from the model.")
+            
+            except Exception as e:
+                print(f"An error occurred while processing a message: {e}")
+                if status_msg:
+                    try:
+                        await status_msg.edit(content=f"⚠️ An unexpected error occurred: {e}")
+                    except Exception:
+                        pass
+                else:
+                    await message.channel.send(f"⚠️ An unexpected error occurred: {e}")
 
 # --- Slash Commands ---
 # (The rest of the slash commands remain the same)
@@ -270,16 +308,90 @@ async def think_command(interaction: discord.Interaction, enabled: bool):
     else:
         await interaction.response.send_message("✅ Thinking mode has been **disabled**.", ephemeral=True)
 
-@app_commands.command(name="grounding", description="Toggle Google Search grounding.")
+@app_commands.command(name="grounding", description="Toggle web search grounding (DuckDuckGo + Jina Reader).")
 @app_commands.describe(enabled="Set to 'True' to enable, 'False' to disable.")
 async def grounding_command(interaction: discord.Interaction, enabled: bool):
     bot = interaction.client
     bot.grounding_enabled = enabled
     bot.save_settings()
     if enabled:
-        await interaction.response.send_message("🌍 Grounding has been **enabled**. The bot will now use Google Search.", ephemeral=True)
+        await interaction.response.send_message("🌍 Web search grounding has been **enabled**. The bot will search the web when needed.", ephemeral=True)
     else:
-        await interaction.response.send_message("✅ Grounding has been **disabled**.", ephemeral=True)
+        await interaction.response.send_message("✅ Web search grounding has been **disabled**.", ephemeral=True)
+
+@app_commands.command(name="websearch", description="Toggle web search grounding (DuckDuckGo + Jina Reader).")
+@app_commands.describe(enabled="Set to 'True' to enable, 'False' to disable.")
+async def websearch_command(interaction: discord.Interaction, enabled: bool):
+    await grounding_command(interaction, enabled)
+
+POPULAR_GEMINI_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro"
+]
+
+@app_commands.command(name="provider", description="Switch the LLM provider between LM Studio and Gemini (Admin only).")
+@app_commands.describe(name="Select the LLM provider.")
+@app_commands.choices(name=[
+    app_commands.Choice(name="LM Studio (Local)", value="LMSTUDIO"),
+    app_commands.Choice(name="Google Gemini (Cloud)", value="GEMINI")
+])
+@app_commands.default_permissions(administrator=True)
+async def provider_command(interaction: discord.Interaction, name: app_commands.Choice[str]):
+    if interaction.guild and not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You do not have permission to use this command (Administrator required).", ephemeral=True)
+        return
+
+    bot = interaction.client
+    bot.llm_provider = name.value
+    bot.save_settings()
+    
+    if name.value == "GEMINI":
+        await interaction.response.send_message(f"✅ LLM provider switched to **Google Gemini** (Model: `{bot.gemini_model}`).", ephemeral=True)
+    else:
+        await interaction.response.send_message("✅ LLM provider switched to **LM Studio** (Local Server).", ephemeral=True)
+
+@app_commands.command(name="source", description="Alias for /provider (Admin only).")
+@app_commands.describe(name="Select the LLM provider.")
+@app_commands.choices(name=[
+    app_commands.Choice(name="LM Studio (Local)", value="LMSTUDIO"),
+    app_commands.Choice(name="Google Gemini (Cloud)", value="GEMINI")
+])
+@app_commands.default_permissions(administrator=True)
+async def source_command(interaction: discord.Interaction, name: app_commands.Choice[str]):
+    await provider_command(interaction, name)
+
+@app_commands.command(name="model", description="Change the active LLM model (Admin only).")
+@app_commands.describe(name="Choose a preset model or enter a custom model name.")
+@app_commands.default_permissions(administrator=True)
+async def model_command(interaction: discord.Interaction, name: str):
+    if interaction.guild and not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You do not have permission to use this command (Administrator required).", ephemeral=True)
+        return
+
+    bot = interaction.client
+    model_name = name.strip()
+    if not model_name:
+        await interaction.response.send_message(f"Current Gemini model: `{bot.gemini_model}` (Active Provider: `{bot.llm_provider}`).", ephemeral=True)
+        return
+
+    bot.gemini_model = model_name
+    bot.save_settings()
+    await interaction.response.send_message(f"✅ Model updated to **{model_name}** (Active provider: `{bot.llm_provider}`).", ephemeral=True)
+
+@model_command.autocomplete('name')
+async def model_command_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+    choices = [
+        app_commands.Choice(name=m, value=m)
+        for m in POPULAR_GEMINI_MODELS
+        if current.lower() in m.lower()
+    ]
+    if current and not any(c.value == current for c in choices):
+        choices.insert(0, app_commands.Choice(name=f"Custom: {current}", value=current))
+    return choices[:25]
 
 @app_commands.command(name="showprompts", description="Lists all available preset prompts.")
 async def list_prompts(interaction: discord.Interaction):
@@ -295,11 +407,13 @@ async def list_prompts(interaction: discord.Interaction):
 @app_commands.command(name="help", description="Shows the list of available commands.")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(title="Bot Commands", description="Here are the available slash commands:", color=discord.Color.green())
+    embed.add_field(name="/provider [LM Studio|Gemini]", value="Switches the active LLM provider (Admin only). Alias: `/source`.", inline=False)
+    embed.add_field(name="/model [name]", value="Changes the active model name (Admin only).", inline=False)
     embed.add_field(name="/setprompt [name|custom]", value="Sets the bot's system prompt. This disables random mode.", inline=False)
     embed.add_field(name="/prompt", value="Displays the current system prompt or random mode status.", inline=False)
     embed.add_field(name="/random [True|False]", value="Toggles using a random prompt for each reply.", inline=False)
     embed.add_field(name="/think [True|False]", value="Toggles whether the bot shows its thought process (LM Studio only).", inline=False)
-    embed.add_field(name="/grounding [True|False]", value="Toggles whether the bot uses Google Search grounding (Gemini only).", inline=False)
+    embed.add_field(name="/grounding [True|False]", value="Toggles whether the bot uses web search grounding (DuckDuckGo + Jina Reader).", inline=False)
     embed.add_field(name="/showprompts", value="Lists all available preset prompts.", inline=False)
     embed.add_field(name="/clearhistory", value="Clears the conversation history for this channel.", inline=False)
     embed.add_field(name="/help", value="Shows this help message.", inline=False)
@@ -318,6 +432,9 @@ async def clear_history(interaction: discord.Interaction):
 
 async def setup(bot: commands.Bot):
     """Adds the slash commands to the bot's command tree."""
+    bot.tree.add_command(provider_command)
+    bot.tree.add_command(source_command)
+    bot.tree.add_command(model_command)
     bot.tree.add_command(setprompt)
     bot.tree.add_command(prompt)
     bot.tree.add_command(list_prompts)
@@ -325,5 +442,7 @@ async def setup(bot: commands.Bot):
     bot.tree.add_command(random_command)
     bot.tree.add_command(think_command)
     bot.tree.add_command(grounding_command)
+    bot.tree.add_command(websearch_command)
     bot.tree.add_command(clear_history)
+
 

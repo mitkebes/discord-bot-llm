@@ -3,6 +3,7 @@ This Discord bot allows you to chat with an AI, powered by either a local model 
 ## Features
 
 - **Dual Backend Support**: Choose between a local LM Studio server or the Google Gemini API.
+- **Autonomous Web Search Grounding**: Automatically searches the web via DuckDuckGo and reads pages via Jina Reader when questions need real-time data, with live status progress messages.
 - **Slash Commands**: Modern and user-friendly `/` commands with autocomplete.
 - **Dynamic Personalities**: Use `/setprompt` to switch the bot's system prompt instantly from a predefined list or with a custom one.
 - **Random Prompt Mode**: Use `/random` to have the bot pick a different personality for each reply.
@@ -137,6 +138,9 @@ Interact with the bot in your Discord server using these slash commands:
 -   `/showprompts`: Lists all the available preset personalities (system prompts) from the `prompts.json` file.
 -   `/prompt`: Shows the system prompt the bot is currently using.
 -   `/setprompt <name>`: Changes the bot's personality. Start typing a name, and it will autocomplete with available presets. You can also type your own custom prompt directly.
+-   `/provider <LM Studio|Gemini>`: Switches the active LLM provider (Admin only). Also available as `/source`.
+-   `/model <name>`: Changes the active model name (Admin only, with preset autocomplete for Gemini models).
 -   `/random <True|False>`: Toggles using a random prompt for each reply.
 -   `/think <True|False>`: Toggles whether the bot shows its thought process (LM Studio only).
+-   `/grounding <True|False>`: Toggles whether the bot uses web search grounding (DuckDuckGo + Jina Reader). Also available as `/websearch`.
 -   **Mention the bot**: You can also have a conversation with the bot by mentioning it directly (e.g., `@YourBotName What is the capital of France?`).

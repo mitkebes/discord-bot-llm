@@ -3,3 +3,5 @@ python-dotenv==1.0.1
 aiohttp>=3.10.11
 google-genai
 audioop-lts; python_version>='3.13'
+duckduckgo-search>=8.0.0
+ddgs>=9.0.0
